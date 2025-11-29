@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>不規則動詞演習</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+    <h1 id="pageTitle">読み込み中...</h1>
+    
+    <div style="text-align:center; margin-bottom:10px;">
+        <a href="./index.html" style="font-size:0.9rem;">← メニューに戻る</a>
+    </div>
+
+    <div class="controls">
+        <div class="level-group">
+            <button class="level-btn active" onclick="app.setDifficulty(1)">Level 1</button>
+            <button class="level-btn" onclick="app.setDifficulty(2)">Level 2</button>
+            <button class="level-btn" onclick="app.setDifficulty(3)">Level 3</button>
+        </div>
+        <div class="mode-group">
+            <label class="mode-label">
+                <input type="radio" name="mode" value="basic" checked onchange="app.changeMode()">
+                基本
+            </label>
+            <label class="mode-label">
+                <input type="radio" name="mode" value="full" onchange="app.changeMode()">
+                すべて
+            </label>
+        </div>
+    </div>
+
+    <div id="messageArea"></div>
+
+    <div class="table-container">
+        <table id="quizTable"></table>
+    </div>
+
+    <div class="btn-container">
+        <button id="checkBtn" class="action-btn" onclick="app.checkAnswers()">答え合わせ</button>
+        <button id="retryBtn" class="action-btn hidden" onclick="app.resetQuiz()">もう一回</button>
+    </div>
+
+    <script src="./app.js"></script>
+
+    <script>
+        const verbData = {
+            title: "不規則動詞の活用",
+            // ヘッダー定義
+            allColHeaders: ["原形", "過去形", "過去分詞"],
+            rowHeaders: [
+                "go (行く)", "see (見る)", "buy (買う)", "take (取る)", 
+                "come (来る)", "know (知る)", "speak (話す)", "write (書く)"
+            ],
+            // データ定義
+            allData: [
+                ["go",    "went",   "gone"],
+                ["see",   "saw",    "seen"],
+                ["buy",   "bought", "bought"],
+                ["take",  "took",   "taken"],
+                ["come",  "came",   "come"],
+                ["know",  "knew",   "known"],
+                ["speak", "spoke",  "spoken"],
+                ["write", "wrote",  "written"]
+            ],
+            // オプション: モード切替を隠す
+            disableModeSelection: true 
+        };
+
+        // アプリ起動
+        app.init(verbData);
+    </script>
+</body>
+</html>
