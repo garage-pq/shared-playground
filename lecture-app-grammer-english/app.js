@@ -24,7 +24,8 @@ const app = (function() {
         const modeGroup = document.querySelector('.mode-group');
         if (config.disableModeSelection && modeGroup) {
             modeGroup.style.display = 'none';
-            currentMode = 'basic'; // 強制的にbasic扱い（または全列表示）にする
+            // モード選択が無効な場合、設定があればbasicColCountに従うか、なければ全表示
+            currentMode = config.basicColCount ? 'basic' : 'full';
         }
 
         resetQuiz();
@@ -101,12 +102,15 @@ const app = (function() {
             config.allData.forEach((fullRowData, rIndex) => {
                 let rowCells = [];
                 let rowBlankCount = 0;
-
+                let quizTargetCount = 0; // その行で穴埋め対象となりうるセルの数
+                
                 for (let cIndex = 0; cIndex < colCount; cIndex++) {
                     const cellData = fullRowData[cIndex];
                     let isBlank = false;
-                    
-                    if (cellData !== "-") {
+                    const isExcluded = config.noQuizColumns && config.noQuizColumns.includes(cIndex);
+
+                    if (cellData !== "-" && !isExcluded) {
+                        quizTargetCount++; // 穴埋め候補としてカウント
                         if (Math.random() < rate) {
                             isBlank = true;
                             rowBlankCount++;
@@ -122,7 +126,7 @@ const app = (function() {
                 }
 
                 // 詰み防止: 行すべてが空欄なら1つ開ける
-                if (rowBlankCount === colCount && colCount > 0) {
+                if (rowBlankCount === quizTargetCount && quizTargetCount > 0) {
                      const blankIndices = rowCells
                         .map((cell, idx) => cell.isBlank ? idx : -1)
                         .filter(idx => idx !== -1);
