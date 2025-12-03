@@ -84,6 +84,13 @@ h1 {
     border: 1px solid #c3e6cb;
     animation: fadeIn 0.5s;
 }
+.msg-veryclose {
+    background-color: #ededd4;
+    color: #575715;
+    border: 1px solid #e6e6c3;
+    animation: fadeIn 0.5s;
+}
+
 
 /* テーブル */
 .table-container {
