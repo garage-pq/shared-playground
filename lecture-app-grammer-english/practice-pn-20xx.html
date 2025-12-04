@@ -67,6 +67,15 @@
             border: 1px solid #c3e6cb;
             animation: fadeIn 0.5s;
         }
+        .msg-veryclose {
+            background-color: #ededd4;
+            color: #575715;
+            border: 1px solid #e6e6c3;
+            animation: fadeIn 0.5s;
+        }
+        .description {
+            text-align: center;
+        }
 
         /* --- テーブル --- */
         .table-container {
@@ -208,7 +217,7 @@
         <button id="retryBtn" class="action-btn hidden" onclick="app.resetQuiz()">もう一回</button>
     </div>
     <div class="description">
-        ページの再読み込み（リロード）で空欄は再配置されます。
+        ページの再読み込み（リロード）で空欄は再配置されます。<br>
         Levelが上がると空欄が作られやすくなるように設定しています。
     </div>
 
@@ -343,7 +352,6 @@
                         });
                     }
 
-                    // --- [改善ロジック] ---
                     // 行すべてが空欄(rowBlankCount === colCount)になってしまった場合、
                     // ランダムに1つだけ空欄を解除する（ヒントを残す）
                     if (rowBlankCount === colCount && colCount > 0) {
@@ -435,10 +443,15 @@
             getEl('checkBtn').classList.add('hidden');
             getEl('retryBtn').classList.remove('hidden');
 
-            if (correctCount === totalCount) {
+            if (correctCount >= (totalCount - 1)) {
                 const msgArea = getEl('messageArea');
-                msgArea.textContent = "🎉 Perfect!! 全問正解です！ 🎉";
-                msgArea.className = 'msg-success';
+                if (correctCount === totalCount) {
+                    msgArea.textContent = "🎉 Perfect!! 全問正解です！ 🎉";
+                    msgArea.className = 'msg-success';
+                } else if (totalCount >= 2 && correctCount === (totalCount - 1)) {
+                    msgArea.textContent = "惜しい！ あと1問です！";
+                    msgArea.className = 'msg-veryclose';
+                }
                 msgArea.style.display = 'block';
             }
         }
