@@ -90,7 +90,9 @@ h1 {
     border: 1px solid #e6e6c3;
     animation: fadeIn 0.5s;
 }
-
+.description-box {
+    text-align: center;
+}
 
 /* テーブル */
 .table-container {
