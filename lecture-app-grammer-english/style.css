@@ -67,6 +67,7 @@ h1 {
     display: flex; gap: 15px; font-size: 0.95rem; align-items: center; 
 }
 .mode-label { cursor: pointer; display: flex; align-items: center; gap: 5px; }
+input[type="radio"] { transform: scale(1.2); cursor: pointer; }
 
 /* メッセージエリア */
 #messageArea {
