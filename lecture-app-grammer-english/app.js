@@ -14,7 +14,7 @@ const app = (function() {
     let currentRowCount = 0; 
     const STORAGE_KEY_PREFIX = 'quiz_last_rows_'; 
 
-    // ★追加: 現在表示している行インデックスを保持する変数
+    // 現在表示している行インデックスを保持する変数
     let currentRowIndices = [];
 
     const getEl = (id) => document.getElementById(id);
@@ -51,8 +51,6 @@ const app = (function() {
             if (index + 1 === level) btn.classList.add('active');
             else btn.classList.remove('active');
         });
-        // 難易度変更時は、同じ単語セットで穴埋め箇所を変えるのが自然なので true にする
-        // （お好みで false にして全取っ替えでも可）
         resetQuiz(true);
     }
 
@@ -64,13 +62,13 @@ const app = (function() {
                 break;
             }
         }
-        resetQuiz(true); // モード変更時も同じ単語セットを維持
+        resetQuiz(true); 
     }
 
     function setRowCount(count) {
         currentRowCount = count;
         updateRowCountUI();
-        resetQuiz(false); // 件数変更時はさすがに選び直し
+        resetQuiz(false); 
     }
 
     function updateRowCountUI() {
@@ -116,8 +114,6 @@ const app = (function() {
             selectedIndices = shuffledHidden.slice(0, v);
         }
 
-        // ★ここでは保存しない（resetQuiz内で決定してから保存するように変更してもよいが、
-        // 構造維持のためここで保存し、再利用時はこの関数を呼ばない設計にする）
         try {
             localStorage.setItem(storageKey, JSON.stringify(selectedIndices));
         } catch (e) {}
@@ -125,7 +121,6 @@ const app = (function() {
         return selectedIndices.sort((a, b) => a - b);
     }
 
-    // ★修正: 引数 isRetrySame を追加
     function resetQuiz(isRetrySame = false) {
         const msgArea = getEl('messageArea');
         msgArea.style.display = 'none';
@@ -133,13 +128,14 @@ const app = (function() {
         msgArea.textContent = '';
         
         // --- ボタン表示のリセット（すべて隠す） ---
-        getEl('checkBtn').classList.remove('hidden');
+        const checkBtn = getEl('checkBtn');
+        if(checkBtn) checkBtn.classList.remove('hidden');
         
-        // 既存のボタン
+        // ★修正ポイント: retryBtn が存在する場合のみ操作する
         const retryBtn = getEl('retryBtn');
         if (retryBtn) retryBtn.classList.add('hidden');
         
-        // 新しい2つのボタン
+        // 新しい2つのボタンも存在確認してから操作
         const retrySameBtn = getEl('retrySameBtn');
         if (retrySameBtn) retrySameBtn.classList.add('hidden');
         const nextBtn = getEl('nextBtn');
@@ -149,7 +145,6 @@ const app = (function() {
         const table = getEl('quizTable');
         table.textContent = ''; 
 
-        // 列数の決定
         let colCount;
         if (config.disableModeSelection) {
             colCount = config.allColHeaders.length;
@@ -168,17 +163,13 @@ const app = (function() {
         }
         table.appendChild(thead);
 
-        // --- データ行の選定 ---
         let targetIndices;
         
-        // ★ロジック追加: 同じ問題を再利用するか、新しく選ぶか
         if (isRetrySame && currentRowIndices.length > 0) {
-            // 同じ行インデックスを再利用（穴埋め位置はランダムで変わる）
             targetIndices = currentRowIndices;
         } else {
-            // 新しく選定（localStorage更新も走る）
             targetIndices = selectRowIndices(config.allData.length);
-            currentRowIndices = targetIndices; // 記憶しておく
+            currentRowIndices = targetIndices; 
         }
 
         const rate = difficultyRates[currentLevel];
@@ -298,15 +289,13 @@ const app = (function() {
 
         getEl('checkBtn').classList.add('hidden');
         
-        // ★修正: 存在するボタンだけを表示する
-        // verbs.html のように2つボタンがある場合
+        // ボタンの表示制御
         const retrySameBtn = getEl('retrySameBtn');
         const nextBtn = getEl('nextBtn');
         if (retrySameBtn && nextBtn) {
             retrySameBtn.classList.remove('hidden');
             nextBtn.classList.remove('hidden');
         } else {
-            // practice.html のように1つしかボタンがない場合
             const retryBtn = getEl('retryBtn');
             if (retryBtn) retryBtn.classList.remove('hidden');
         }
