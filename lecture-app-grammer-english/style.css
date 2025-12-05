@@ -181,9 +181,13 @@ button.action-btn {
 #checkBtn { background-color: #20c997; color: #fff; }
 #checkBtn:hover { background-color: #1aa179; }
 
-/* 次の問題：青 */
-#nextBtn, #retryBtn { background-color: #5a67c5; color: #fff; }
-#nextBtn:hover, #retryBtn:hover  { background-color: #4b66a4; }
+#retryBtn, #nextBtn { background-color: #007bff; }
+#retryBtn:hover, #nextBtn:hover { background-color: #0069d9; }
+
+/* 次の問題：青 
+#nextBtn { background-color: #5a67c5; color: #fff; }
+#nextBtn:hover  { background-color: #4b66a4; }
+*/
 
 /* 同じ問題：落ち着いたマスタード */
 #retrySameBtn {
