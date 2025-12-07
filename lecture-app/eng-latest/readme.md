@@ -74,21 +74,21 @@ HTMLファイル内の設定（JSON）を差し替えるだけで、英単語・
  └─ 📄 style.css   （デザイン）
 ```
 
-# 自作問題への差し替えガイド（生成AI活用編）
+## 自作問題への差し替えガイド（生成AI活用編）
 
 このアプリは、HTMLファイルの中にあるデータを書き換えるだけで、「英単語」だけでなく「理科の元素記号」「歴史の年号」「漢字の読み」など、様々な暗記ドリルに変身させることができます。
 
 **Excel（またはスプレッドシート）** と **生成AI（ChatGPT, Google Gemini など）** があれば、オリジナルのアプリが作れるはずです。
 
-## 必要なもの
+### 必要なもの
 
 1.  **元となるHTMLファイル**（`verbs.html` など）
 2.  **新しい問題データ**（ExcelやGoogleスプレッドシートで作った表）
 3.  **生成AI**（ChatGPT, Google Geminiなど、ファイルを添付できるものがおすすめ）
 
-## 手順
+### 手順
 
-### STEP 1: 問題データを用意する
+#### STEP 1: 問題データを用意する
 
 Excelなどで、問題にしたい表を作ります。
 
@@ -104,11 +104,11 @@ Excelなどで、問題にしたい表を作ります。
 | リチウム | Li | Lithium |
 
 
-### STEP 2: 生成AIに「書き換え」を依頼する
+#### STEP 2: 生成AIに「書き換え」を依頼する
 
 生成AIのチャット画面を開き、**「元のHTMLファイル」をアップロード**した上で、以下のプロンプト（命令文）と、Excelからコピーしたデータを貼り付けて送信します。
 
-#### 📋 コピー用プロンプト（命令文）
+##### 📋 コピー用プロンプト（命令文）
 
 ```text
 添付したHTMLファイル（verbs.html）を元に、新しいクイズアプリを作りたいと思います。
@@ -128,14 +128,14 @@ HTML内の <script> タグにある `quizData` の内容を、以下のデータ
 （ここにExcelの表をそのままコピペしてください）
 ```
 
-### STEP 3: コードを貼り付ける
+#### STEP 3: コードを貼り付ける
 
 1.  AIが生成したコード（`<script>...` の部分）をコピーします。
 2.  テキストエディタ（メモ帳やVS Codeなど）で `verbs.html` を開きます。
 3.  ページ下部の `<script>` ～ `</script>` の間で、設定データ（`const quizData = ...`）が書かれている部分を、生成AIが出力したコードに置き換えます。
 4.  **「名前を付けて保存」** で、わかりやすい名前（例：`science.html`）にして保存します。
 
-### STEP 4: 完成！
+#### STEP 4: 完成！
 
 保存したHTMLファイルをブラウザ（ChromeやEdge）で開いてみてください。
 あなたが作ったデータでクイズが始まります！<br>
@@ -158,5 +158,7 @@ HTML内の <script> タグにある `quizData` の内容を、以下のデータ
 
 
 
-## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+# License
+Copyright (c) 2025 yz-rrr<br>
+Released under the MIT license<br>
+https://opensource.org/licenses/mit-license.php
