@@ -63,9 +63,14 @@
             ["you",  "you",  "your",  "yours",  "yourselves"],
             ["they", "them", "their", "theirs", "themselves"]
         ],
+        // オプション：デフォルトで表示する行数が全部ではない場合に記述
         basicColCount: 3,
-        // オプション: モード切替を隠すかどうか
+        // オプション: 表示列数モード切替を隠すかどうか
         disableModeSelection: false,
+        // 【オプション】各行の穴埋め対象セルが空欄だけになることを許可するか？ レベルごとに記述
+        allowFullRowBlanks: { 1: false, 2: true, 3: true },
+        // 【オプション】各行、最低でも何個は空欄にするか？　レベルごとに記述
+        minBlanks: { 1: 0, 2: 1, 3: 2 },
         // 穴埋めしない列を記述
         noQuizColumns: []
     };
