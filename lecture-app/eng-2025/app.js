@@ -197,7 +197,7 @@ const app = (function() {
         const checkBtn = getEl('checkBtn');
         if(checkBtn) checkBtn.classList.remove('hidden');
         
-        // ★修正: 存在確認をしてから hidden を追加（エラー防止）
+        // 存在確認をしてから hidden を追加（エラー防止）
         // 既存の練習ページ用ボタン
         const retryBtn = getEl('retryBtn');
         if (retryBtn) retryBtn.classList.add('hidden');
@@ -250,6 +250,9 @@ const app = (function() {
         let totalBlanks = 0;
         let attempts = 0;
 
+        // 各行の穴埋め対象セルが空欄だけになるのを許可するか
+        const allowFullRowBlanks = config.allowFullRowBlanks || false;
+
         // 穴埋め生成ループ（最低でも2箇所の穴ができるまで試行）
         do {
             tableRows = [];
@@ -285,7 +288,7 @@ const app = (function() {
                 }
 
                 // 詰み防止: 行すべてが空欄になってしまったら1つ開ける
-                if (rowBlankCount === quizTargetCount && quizTargetCount > 0) {
+                if (!allowFullRowBlanks && (rowBlankCount === quizTargetCount) && quizTargetCount > 0) {
                      const blankIndices = rowCells
                         .map((cell, idx) => cell.isBlank ? idx : -1)
                         .filter(idx => idx !== -1);
