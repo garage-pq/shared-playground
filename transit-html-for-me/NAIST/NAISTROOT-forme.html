@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>自分用NAISTバス時刻表＋経路表示</title>
+    <style>
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        h1,
+        h2 {
+            color: #2c3e50;
+            font-size: 1.4em;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .control-panel {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* フォーム要素のスタイリング */
+        .select-group {
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        select {
+            padding: 8px 15px;
+            font-size: 16px;
+            border-radius: 4px;
+            border: 1px solid #bdc3c7;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 15px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #3498db;
+            color: white;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background: #f8f9fa;
+            color: #333;
+        }
+
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .route-info {
+            font-size: 0.85em;
+            color: #666;
+            text-align: left;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            color: white;
+            font-size: 0.85em;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .bg-takanohara {
+            background-color: #27ae60;
+        }
+
+        .bg-gakuenmae {
+            background-color: #e67e22;
+        }
+
+        .bg-gakkennkita {
+            background-color: #8e44ad;
+        }
+
+        .time-highlight {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+
+        .error {
+            color: #c0392b;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>自分用NAISTバス時刻表＋経路表示</h1>
+
+        <div class="control-panel">
+            <div class="select-group" style="font-size: 0.9em;">
+                <label>バス乗り換えマージン：
+                    <input type="number" id="margin-bus" value="5" min="0" max="30" style="width:4em;"> 分
+                </label>
+                　
+                <label>丹波橋乗り換えマージン：
+                    <input type="number" id="margin-danbabashi" value="7" min="0" max="30" style="width:4em;"> 分
+                </label>
+            </div>
+            <div class="select-group">
+                <label for="direction">方向：</label>
+                <select id="direction">
+                    <option value="toNAIST">行き（NAIST到着基準）</option>
+                    <option value="fromNAIST">帰り（NAIST出発基準）</option>
+                </select>
+            </div>
+            <p style="margin-top:0; font-size: 0.9em; color: #555;">ダイヤは2026年4月時点．電車統合は学園前・高の原経由のみ表示．バス時刻表で学園前と学研北生駒は別々に表示．</p>
+            <button onclick="renderUnifiedTable()">(1) バス時刻表</button>
+            <button onclick="calculateUnifiedRoute()">(2) 出町柳発着ルート探索</button>
+        </div>
+
+        <h2 id="table-title">結果</h2>
+        <div id="table-container"></div>
+    </div>
+
+    <script>
+        // --- ユーティリティ関数 ---
+        function timeToMins(timeStr) {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        }
+
+        function minsToTime(mins) {
+            const h = Math.floor(mins / 60).toString().padStart(2, '0');
+            const m = (mins % 60).toString().padStart(2, '0');
+            return `${h}:${m}`;
+        }
+
+        // [逆算用] 目標時刻に間に合う、最も遅く出発できる列車
+        function findLatestTrainForArrival(timetableArr, targetMins) {
+            const validTrains = timetableArr.filter(train => timeToMins(train.arr) <= targetMins);
+            if (validTrains.length === 0) return null;
+            validTrains.sort((a, b) => timeToMins(b.dep) - timeToMins(a.dep));
+            return validTrains[0];
+        }
+
+        // [順算用] 出発可能時刻以降で、最も早く到着する列車
+        function findEarliestTrainForDeparture(timetableArr, earliestDepMins) {
+            const validTrains = timetableArr.filter(train => timeToMins(train.dep) >= earliestDepMins);
+            if (validTrains.length === 0) return null;
+            validTrains.sort((a, b) => timeToMins(a.arr) - timeToMins(b.arr));
+            return validTrains[0];
+        }
+
+        // --- データベース ---
+        const stationNames = {
+            takanohara: "高の原駅",
+            gakuenmae: "学園前駅",
+            gakkennkita: "学研北生駒駅"
+        };
+
+        // バスデータ (往路/復路)
+        const busData = {
+            toNAIST: {
+                takanohara: [
+                    { dep: "06:42", arr: "07:07" }, { dep: "07:53", arr: "08:20" }, { dep: "08:42", arr: "09:08" },
+                    { dep: "09:50", arr: "10:16" }, { dep: "10:50", arr: "11:16" }, { dep: "12:50", arr: "13:16" },
+                    { dep: "14:50", arr: "15:16" }, { dep: "16:23", arr: "16:50" }, { dep: "16:53", arr: "17:20" },
+                    { dep: "18:13", arr: "18:41" }, { dep: "19:13", arr: "19:39" }, { dep: "20:07", arr: "20:32" }
+                ],
+                gakuenmae: [
+                    { dep: "07:06", arr: "07:27" }, { dep: "07:36", arr: "07:59" }, { dep: "07:54", arr: "08:15" },
+                    { dep: "08:31", arr: "08:58" }, { dep: "08:43", arr: "09:06" }, { dep: "09:26", arr: "09:53" },
+                    { dep: "10:26", arr: "10:53" }, { dep: "11:26", arr: "11:53" }, { dep: "12:26", arr: "12:53" },
+                    { dep: "13:26", arr: "13:53" }, { dep: "14:26", arr: "14:53" }, { dep: "15:26", arr: "15:53" },
+                    { dep: "16:26", arr: "16:53" }, { dep: "16:56", arr: "17:23" }, { dep: "17:26", arr: "17:53" },
+                    { dep: "17:52", arr: "18:19" }, { dep: "18:20", arr: "18:47" }, { dep: "19:20", arr: "19:47" }
+                ],
+                gakkennkita: [
+                    { dep: "06:38", arr: "06:43" }, { dep: "07:02", arr: "07:07" }, { dep: "07:22", arr: "07:27" },
+                    { dep: "07:29", arr: "07:34" }, { dep: "07:37", arr: "07:42" }, { dep: "07:45", arr: "07:50" },
+                    { dep: "07:54", arr: "07:59" }, { dep: "08:00", arr: "08:05" }, { dep: "08:05", arr: "08:10" },
+                    { dep: "08:10", arr: "08:15" }, { dep: "08:29", arr: "08:34" }, { dep: "08:38", arr: "08:43" },
+                    { dep: "08:53", arr: "08:58" }, { dep: "09:01", arr: "09:06" }, { dep: "09:48", arr: "09:53" },
+                    { dep: "10:48", arr: "10:53" }, { dep: "11:48", arr: "11:53" }, { dep: "12:48", arr: "12:53" },
+                    { dep: "13:48", arr: "13:53" }, { dep: "14:48", arr: "14:53" }, { dep: "15:48", arr: "15:53" },
+                    { dep: "16:48", arr: "16:53" }, { dep: "17:18", arr: "17:23" }, { dep: "17:39", arr: "17:44" },
+                    { dep: "17:48", arr: "17:53" }, { dep: "18:14", arr: "18:19" }, { dep: "18:42", arr: "18:47" },
+                    { dep: "19:01", arr: "19:06" }, { dep: "19:42", arr: "19:47" }, { dep: "20:13", arr: "20:18" },
+                    { dep: "20:40", arr: "20:45" }
+                ]
+            },
+            fromNAIST: {
+                takanohara: [
+                    { dep: "07:29", arr: "07:59" }, { dep: "08:39", arr: "09:08" }, { dep: "09:29", arr: "09:58" },
+                    { dep: "10:34", arr: "11:03" }, { dep: "11:34", arr: "12:03" }, { dep: "13:34", arr: "14:03" },
+                    { dep: "15:34", arr: "16:04" }, { dep: "17:09", arr: "17:41" }, { dep: "17:34", arr: "18:11" },
+                    { dep: "19:00", arr: "19:31" }, { dep: "19:57", arr: "20:25" }, { dep: "20:43", arr: "21:09" }
+                ],
+                gakuenmae: [
+                    { dep: "06:13", arr: "06:36" }, { dep: "06:52", arr: "07:15" }, { dep: "07:40", arr: "08:03" },
+                    { dep: "08:24", arr: "08:52" }, { dep: "09:17", arr: "09:45" }, { dep: "10:02", arr: "10:30" },
+                    { dep: "11:02", arr: "11:30" }, { dep: "12:02", arr: "12:30" }, { dep: "13:02", arr: "13:30" },
+                    { dep: "14:02", arr: "14:30" }, { dep: "15:17", arr: "15:45" }, { dep: "16:02", arr: "16:30" },
+                    { dep: "17:07", arr: "17:35" }, { dep: "17:43", arr: "18:11" }, { dep: "18:13", arr: "18:41" },
+                    { dep: "18:37", arr: "19:05" }, { dep: "19:02", arr: "19:30" }, { dep: "19:59", arr: "20:27" },
+                    { dep: "21:32", arr: "21:59" }
+                ],
+                gakkennkita: [
+                    { dep: "06:13", arr: "06:20" }, { dep: "06:52", arr: "06:59" }, { dep: "07:18", arr: "07:25" },
+                    { dep: "07:40", arr: "07:47" }, { dep: "08:08", arr: "08:15" }, { dep: "08:19", arr: "08:26" },
+                    { dep: "08:24", arr: "08:31" }, { dep: "08:51", arr: "08:58" }, { dep: "09:17", arr: "09:24" },
+                    { dep: "10:02", arr: "10:09" }, { dep: "11:02", arr: "11:09" }, { dep: "12:02", arr: "12:09" },
+                    { dep: "13:02", arr: "13:09" }, { dep: "14:02", arr: "14:09" }, { dep: "15:17", arr: "15:24" },
+                    { dep: "16:02", arr: "16:09" }, { dep: "17:07", arr: "17:14" }, { dep: "17:25", arr: "17:32" },
+                    { dep: "17:37", arr: "17:44" }, { dep: "17:40", arr: "17:47" }, { dep: "17:43", arr: "17:50" },
+                    { dep: "17:57", arr: "18:04" }, { dep: "18:13", arr: "18:20" }, { dep: "18:24", arr: "18:31" },
+                    { dep: "18:37", arr: "18:44" }, { dep: "18:49", arr: "18:56" }, { dep: "19:02", arr: "19:09" },
+                    { dep: "19:22", arr: "19:29" }, { dep: "19:44", arr: "19:51" }, { dep: "19:59", arr: "20:06" },
+                    { dep: "20:29", arr: "20:36" }, { dep: "20:59", arr: "21:06" }, { dep: "21:32", arr: "21:39" },
+                    { dep: "22:02", arr: "22:09" }
+                ]
+            }
+        };
+
+        // 電車データ（※使いそうなものだけ手動で入れた．）
+        const trainData = {
+            // [下り: 往路用]
+            keihan_down: [
+                { dep: "06:44", arr: "06:59" }, { dep: "06:50", arr: "07:04" }, { dep: "07:02", arr: "07:16" },
+                { dep: "07:12", arr: "07:25" }, { dep: "07:19", arr: "07:33" }, { dep: "07:26", arr: "07:39" },
+                { dep: "07:35", arr: "07:50" }, { dep: "07:41", arr: "07:56" }, { dep: "07:47", arr: "08:01" },
+                { dep: "07:56", arr: "08:12" }, { dep: "08:07", arr: "08:21" }, { dep: "08:18", arr: "08:32" },
+                { dep: "08:29", arr: "08:43" }, { dep: "08:38", arr: "08:54" }, { dep: "08:48", arr: "09:03" },
+                { dep: "08:57", arr: "09:12" }
+            ],
+            kintetsu_down_takanohara: [
+                { dep: "07:03", arr: "07:27" }, { dep: "07:15", arr: "07:40" }, { dep: "07:25", arr: "07:53" },
+                { dep: "07:43", arr: "08:08" }, { dep: "07:53", arr: "08:22" }, { dep: "08:07", arr: "08:32" },
+                { dep: "08:20", arr: "08:45" }, { dep: "08:25", arr: "08:51" }, { dep: "08:31", arr: "08:57" },
+                { dep: "08:45", arr: "09:11" }, { dep: "08:55", arr: "09:21" }, { dep: "09:09", arr: "09:36" },
+                { dep: "09:18", arr: "09:44" }, { dep: "09:22", arr: "09:51" }, { dep: "09:28", arr: "10:15" },
+                { dep: "09:36", arr: "10:00" }, { dep: "09:46", arr: "10:12" }
+            ],
+            kintetsu_down_gakuenmae: [
+                { dep: "07:05", arr: "07:51" }, { dep: "07:17", arr: "07:59" }, { dep: "07:23", arr: "08:05" },
+                { dep: "07:34", arr: "08:17" }, { dep: "07:41", arr: "08:23" }, { dep: "07:48", arr: "08:30" },
+                { dep: "08:03", arr: "08:45" }, { dep: "08:12", arr: "09:01" }, { dep: "08:39", arr: "09:21" },
+                { dep: "08:59", arr: "09:37" }, { dep: "09:11", arr: "09:50" }, { dep: "09:24", arr: "10:05" }
+            ],
+
+            // [上り: 帰路用] 各駅 発 -> 丹波橋 / 出町柳 着
+            kintetsu_up_takanohara: [
+                { dep: "17:11", arr: "17:35" }, { dep: "17:15", arr: "17:42" }, { dep: "17:24", arr: "18:16" },
+                { dep: "17:28", arr: "17:56" }, { dep: "17:40", arr: "18:08" }, { dep: "17:41", arr: "18:30" },
+                { dep: "17:50", arr: "18:14" }, { dep: "17:53", arr: "18:41" }, { dep: "18:00", arr: "18:28" },
+                { dep: "18:12", arr: "18:39" }, { dep: "18:20", arr: "18:45" }, { dep: "18:32", arr: "18:57" },
+                { dep: "18:43", arr: "19:10" }, { dep: "18:59", arr: "19:23" }, { dep: "19:10", arr: "19:37" },
+                { dep: "19:21", arr: "19:45" }, { dep: "19:26", arr: "19:54" }, { dep: "19:32", arr: "20:14" },
+                { dep: "19:40", arr: "20:04" }, { dep: "19:59", arr: "20:23" }, { dep: "20:14", arr: "20:39" },
+                { dep: "20:23", arr: "20:50" }, { dep: "20:38", arr: "21:02" }, { dep: "20:48", arr: "21:31" },
+                { dep: "20:56", arr: "21:20" }
+            ],
+            kintetsu_up_gakuenmae: [
+                { dep: "17:25", arr: "18:06" }, { dep: "17:36", arr: "18:13" }, { dep: "17:50", arr: "18:33" },
+                { dep: "18:06", arr: "18:43" }, { dep: "18:20", arr: "19:03" }, { dep: "18:25", arr: "19:06" },
+                { dep: "18:30", arr: "19:14" }, { dep: "18:50", arr: "19:27" }, { dep: "19:06", arr: "19:42" },
+                { dep: "19:20", arr: "19:59" }, { dep: "19:33", arr: "20:16" }, { dep: "19:47", arr: "20:26" },
+                { dep: "20:05", arr: "20:41" }, { dep: "20:47", arr: "21:25" }, { dep: "21:03", arr: "21:40" }
+            ],
+            keihan_up: [
+                { dep: "17:05", arr: "17:19" }, { dep: "17:10", arr: "17:27" }, { dep: "17:18", arr: "17:31" },
+                { dep: "17:30", arr: "17:43" }, { dep: "17:42", arr: "17:55" }, { dep: "17:47", arr: "18:05" },
+                { dep: "17:55", arr: "18:09" }, { dep: "18:06", arr: "18:20" }, { dep: "18:17", arr: "18:30" },
+                { dep: "18:19", arr: "18:35" }, { dep: "18:30", arr: "18:43" }, { dep: "18:43", arr: "18:56" },
+                { dep: "18:45", arr: "18:59" }, { dep: "18:55", arr: "19:09" }, { dep: "18:58", arr: "19:12" },
+                { dep: "19:08", arr: "19:22" }, { dep: "19:11", arr: "19:25" }, { dep: "19:19", arr: "19:34" },
+                { dep: "19:22", arr: "19:37" }, { dep: "19:32", arr: "19:46" }, { dep: "19:41", arr: "19:56" },
+                { dep: "19:44", arr: "19:59" }, { dep: "19:55", arr: "20:09" }, { dep: "20:07", arr: "20:21" },
+                { dep: "20:19", arr: "20:32" }, { dep: "20:32", arr: "20:45" }, { dep: "20:43", arr: "20:57" },
+                { dep: "20:56", arr: "21:10" }, { dep: "21:08", arr: "21:21" }, { dep: "21:20", arr: "21:33" }
+            ]
+        };
+
+
+        // --- メイン処理 ---
+
+        function getMergedRoutes(direction) {
+            let allRoutes = [];
+            const targetData = busData[direction];
+            for (const stationId in targetData) {
+                targetData[stationId].forEach(route => {
+                    allRoutes.push({
+                        stationId: stationId,
+                        stationName: stationNames[stationId],
+                        dep: route.dep,
+                        arr: route.arr
+                    });
+                });
+            }
+            return allRoutes;
+        }
+
+        // ① 全駅統合 バス時刻表
+        function renderUnifiedTable() {
+            const direction = document.getElementById("direction").value;
+            const container = document.getElementById("table-container");
+
+            let allRoutes = getMergedRoutes(direction);
+            const isToNAIST = direction === "toNAIST";
+
+            document.getElementById("table-title").innerText = isToNAIST ? `バス時刻表 (NAIST到着順)` : `バス時刻表 (NAIST出発順)`;
+
+            // ソート基準：行きなら「到着時刻」、帰りなら「出発時刻」
+            allRoutes.sort((a, b) => timeToMins(isToNAIST ? a.arr : a.dep) - timeToMins(isToNAIST ? b.arr : b.dep));
+
+            let html = `<table><tr>
+            <th>${isToNAIST ? "NAIST到着" : "NAIST出発"}</th>
+            <th>経由駅</th>
+            <th>${isToNAIST ? "バス発車" : "駅到着"}</th>
+            <th>所要時間</th>
+        </tr>`;
+
+            allRoutes.forEach(route => {
+                const duration = timeToMins(route.arr) - timeToMins(route.dep);
+                html += `<tr>
+                <td class="time-highlight">${isToNAIST ? route.arr : route.dep}</td>
+                <td><span class="badge bg-${route.stationId}">${route.stationName}</span></td>
+                <td>${isToNAIST ? route.dep : route.arr}</td>
+                <td>${duration}分</td>
+            </tr>`;
+            });
+
+            html += "</table>";
+            container.innerHTML = html;
+        }
+
+        // ② 全駅統合 ルート探索
+        function calculateUnifiedRoute() {
+            const direction = document.getElementById("direction").value;
+            const container = document.getElementById("table-container");
+            const isToNAIST = direction === "toNAIST";
+
+            document.getElementById("table-title").innerText = isToNAIST
+                ? `出町柳 発 統合ルート探索結果 (NAIST到着順)`
+                : `出町柳 行 統合ルート探索結果 (NAIST出発順)`;
+
+            // 変更後
+            const BUS_TRANSFER_MARGIN = parseInt(document.getElementById("margin-bus").value, 10) || 0;
+            const DANBABASHI_TRANSFER_MARGIN = parseInt(document.getElementById("margin-danbabashi").value, 10) || 0;
+
+            let allRoutes = getMergedRoutes(direction);
+            let validResults = [];
+
+            allRoutes.forEach(route => {
+                if (route.stationId === "gakkennkita") return; // 生駒経由は除外
+
+                if (isToNAIST) {
+                    // 【往路】到着目標からの逆算 (Backwards)
+                    const reqStationArr = timeToMins(route.dep) - BUS_TRANSFER_MARGIN;
+                    const kintetsuSchedule = route.stationId === "takanohara" ? trainData.kintetsu_down_takanohara : trainData.kintetsu_down_gakuenmae;
+                    const kintetsuTrain = findLatestTrainForArrival(kintetsuSchedule, reqStationArr);
+
+                    if (!kintetsuTrain) return;
+
+                    const reqKeihanArr = timeToMins(kintetsuTrain.dep) - DANBABASHI_TRANSFER_MARGIN;
+                    const keihanTrain = findLatestTrainForArrival(trainData.keihan_down, reqKeihanArr);
+
+                    if (!keihanTrain) return;
+
+                    validResults.push({
+                        primaryTime: route.arr, // NAIST着
+                        secondaryTime: keihanTrain.dep, // 出町柳発
+                        stationId: route.stationId,
+                        stationName: route.stationName,
+                        routeDetails: `出町柳(${keihanTrain.dep}) → 丹波橋(${keihanTrain.arr})<br>近鉄丹波橋(${kintetsuTrain.dep}) → ${route.stationName}(${kintetsuTrain.arr})<br>バス発(${route.dep}) → NAIST着`
+                    });
+
+                } else {
+                    // 【復路】出発時刻からの順算 (Forwards)
+                    const earliestKintetsuDep = timeToMins(route.arr) + BUS_TRANSFER_MARGIN;
+                    const kintetsuSchedule = route.stationId === "takanohara" ? trainData.kintetsu_up_takanohara : trainData.kintetsu_up_gakuenmae;
+                    const kintetsuTrain = findEarliestTrainForDeparture(kintetsuSchedule, earliestKintetsuDep);
+
+                    if (!kintetsuTrain) return;
+
+                    const earliestKeihanDep = timeToMins(kintetsuTrain.arr) + DANBABASHI_TRANSFER_MARGIN;
+                    const keihanTrain = findEarliestTrainForDeparture(trainData.keihan_up, earliestKeihanDep);
+
+                    if (!keihanTrain) return;
+
+                    validResults.push({
+                        primaryTime: route.dep, // NAIST発
+                        secondaryTime: keihanTrain.arr, // 出町柳着
+                        stationId: route.stationId,
+                        stationName: route.stationName,
+                        routeDetails: `バス発(${route.dep}) → ${route.stationName}(${route.arr})<br>${route.stationName}(${kintetsuTrain.dep}) → 近鉄丹波橋(${kintetsuTrain.arr})<br>丹波橋(${keihanTrain.dep}) → 出町柳(${keihanTrain.arr})`
+                    });
+                }
+            });
+
+            // -------------------------------------------------------------
+            // ▼ Paretoフィルタ：支配されているルートを除去 ▼
+            // -------------------------------------------------------------
+            let filteredResults = [];
+
+            if (isToNAIST) {
+                // 【往路】最小化: primaryTime(NAIST到着), 最大化: secondaryTime(出町柳出発)
+                // primaryTime昇順・同率はsecondaryTime降順でソートし、
+                // secondaryTimeが単調増加する部分のみ残す
+                validResults.sort((a, b) => {
+                    const dp = timeToMins(a.primaryTime) - timeToMins(b.primaryTime);
+                    return dp !== 0 ? dp : timeToMins(b.secondaryTime) - timeToMins(a.secondaryTime);
+                });
+                let maxDep = -Infinity;
+                filteredResults = validResults.filter(res => {
+                    const dep = timeToMins(res.secondaryTime);
+                    if (dep > maxDep) { maxDep = dep; return true; }
+                    return false;
+                });
+
+            } else {
+                // 【復路】最大化: primaryTime(NAIST出発), 最小化: secondaryTime(出町柳到着)
+                // primaryTime降順・同率はsecondaryTime昇順でソートし、
+                // secondaryTimeが単調減少する部分のみ残す
+                validResults.sort((a, b) => {
+                    const dp = timeToMins(b.primaryTime) - timeToMins(a.primaryTime);
+                    return dp !== 0 ? dp : timeToMins(a.secondaryTime) - timeToMins(b.secondaryTime);
+                });
+                let minArr = Infinity;
+                filteredResults = validResults.filter(res => {
+                    const arr = timeToMins(res.secondaryTime);
+                    if (arr < minArr) { minArr = arr; return true; }
+                    return false;
+                });
+            }
+            // -------------------------------------------------------------
+            // ▲ ここまで ▲
+            // -------------------------------------------------------------
+
+            // 以降の処理は、元の validResults の代わりに filteredResults を使うように変更します
+
+            // 基準時刻（往路なら到着、復路なら出発）でソート
+            filteredResults.sort((a, b) => timeToMins(a.primaryTime) - timeToMins(b.primaryTime));
+
+            let html = `<table><tr>
+            <th>${isToNAIST ? "NAIST到着" : "NAIST出発"}</th>
+            <th>${isToNAIST ? "出町柳 出発" : "出町柳 到着"}</th>
+            <th>経由ルート詳細</th>
+        </tr>`;
+
+            if (filteredResults.length === 0) {
+                html += `<tr><td colspan="3" class="error">計算可能なルートがありません（現在設定されている電車データが不足しています）</td></tr>`;
+            } else {
+                filteredResults.forEach(res => {
+                    html += `<tr>
+                    <td class="time-highlight">${res.primaryTime}</td>
+                    <td style="font-weight: bold;">${res.secondaryTime}</td>
+                    <td class="route-info">
+                        <span class="badge bg-${res.stationId}">${res.stationName}経由</span><br>
+                        ${res.routeDetails}
+                    </td>
+                </tr>`;
+                });
+            }
+
+            html += "</table>";
+            html += "<p style='font-size: 0.8em;'>電車のダイヤはよく使いそうな時間帯に絞ってデータを入れています．ダイヤ改正などがあればソースコードの中に必要なデータを補充してください．</p>";
+            container.innerHTML = html;
+        }
+    </script>
+
+</body>
+
+</html>
