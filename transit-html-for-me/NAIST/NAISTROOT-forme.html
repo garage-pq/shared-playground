@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>自分用NAISTバス時刻表＋経路表示</title>
+    <title>NAISTバス時刻表＋経路表示（出町柳発着）</title>
     <style>
         body {
             font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
@@ -107,30 +107,51 @@
         }
 
         .bg-gakuenmae {
-            background-color: #e67e22;
+            background-color: #c28b2b;
         }
 
         .bg-gakkennkita {
-            background-color: #8e44ad;
+            background-color: #667085;
         }
 
         .time-highlight {
             font-size: 1.1em;
             font-weight: bold;
-            color: #e74c3c;
+            color: #c73120;
         }
 
         .error {
             color: #c0392b;
             font-weight: bold;
         }
+
+        /* バス時刻表：学園前・学研北生駒の共通便における結合セル用 */
+        .merged-naist-cell {
+            vertical-align: middle;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .merged-sub-row td {
+            border-top: none;
+            padding-top: 6px;
+            padding-bottom: 6px;
+            font-size: 0.9em;
+        }
+
+        /* バス時刻表のcolgroup列幅 */
+        col.col-naist { width: 8em; }
+        col.col-target-station { width: 10em; }
+        col.col-other { width: 8em; }
+        col.col-dur   { width: 8em; }
     </style>
 </head>
 
 <body>
 
     <div class="container">
-        <h1>自分用NAISTバス時刻表＋経路表示</h1>
+        <h1>NAISTバス時刻表＋経路表示（京阪出町柳駅発着）</h1>
+
+        <p>経路は，朝：出町柳→NAIST＆夕方：NAIST→出町柳に特化（非・有料特急で丹波橋乗換）．</p>
 
         <div class="control-panel">
             <div class="select-group" style="font-size: 0.9em;">
@@ -146,7 +167,7 @@
                 <label for="direction">方向：</label>
                 <select id="direction">
                     <option value="toNAIST">行き（NAIST到着基準）</option>
-                    <option value="fromNAIST">帰り（NAIST出発基準）</option>
+                    <option value="fromNAIST" selected>帰り（NAIST出発基準）</option>
                 </select>
             </div>
             <p style="margin-top:0; font-size: 0.9em; color: #555;">ダイヤは2026年4月時点．電車統合は学園前・高の原経由のみ表示．バス時刻表で学園前と学研北生駒は別々に表示．</p>
@@ -336,7 +357,7 @@
             return allRoutes;
         }
 
-        // ① 全駅統合 バス時刻表
+        // ① 全駅統合 バス時刻表（学園前・学研北生駒の共通便はNAIST時刻セルを結合）
         function renderUnifiedTable() {
             const direction = document.getElementById("direction").value;
             const container = document.getElementById("table-container");
@@ -347,23 +368,92 @@
             document.getElementById("table-title").innerText = isToNAIST ? `バス時刻表 (NAIST到着順)` : `バス時刻表 (NAIST出発順)`;
 
             // ソート基準：行きなら「到着時刻」、帰りなら「出発時刻」
-            allRoutes.sort((a, b) => timeToMins(isToNAIST ? a.arr : a.dep) - timeToMins(isToNAIST ? b.arr : b.dep));
+            // 同一基準時刻内では gakuenmae → gakkennkita の順に並べる
+            allRoutes.sort((a, b) => {
+                const ta = timeToMins(isToNAIST ? a.arr : a.dep);
+                const tb = timeToMins(isToNAIST ? b.arr : b.dep);
+                if (ta !== tb) return ta - tb;
+                // 同一NAISTタイムでは gakuenmae を先に
+                const order = { gakuenmae: 0, gakkennkita: 1, takanohara: 2 };
+                return (order[a.stationId] ?? 9) - (order[b.stationId] ?? 9);
+            });
 
-            let html = `<table><tr>
-            <th>${isToNAIST ? "NAIST到着" : "NAIST出発"}</th>
-            <th>経由駅</th>
-            <th>${isToNAIST ? "バス発車" : "駅到着"}</th>
-            <th>所要時間</th>
-        </tr>`;
+            // 結合対象の検出：
+            // 基準時刻（NAIST時刻）が同じ gakuenmae と gakkennkita のペアを特定する
+            // skipSet: rowspan=2 のセルを出した次の行（gakkennkita 側）でNAISTセルを省く
+            const skipSet = new Set(); // インデックス番号を入れる
 
-            allRoutes.forEach(route => {
-                const duration = timeToMins(route.arr) - timeToMins(route.dep);
-                html += `<tr>
-                <td class="time-highlight">${isToNAIST ? route.arr : route.dep}</td>
-                <td><span class="badge bg-${route.stationId}">${route.stationName}</span></td>
-                <td>${isToNAIST ? route.dep : route.arr}</td>
-                <td>${duration}分</td>
+            for (let i = 0; i < allRoutes.length - 1; i++) {
+                const a = allRoutes[i];
+                const b = allRoutes[i + 1];
+                const keyA = isToNAIST ? a.arr : a.dep;
+                const keyB = isToNAIST ? b.arr : b.dep;
+                if (
+                    keyA === keyB &&
+                    a.stationId === "gakuenmae" &&
+                    b.stationId === "gakkennkita"
+                ) {
+                    skipSet.add(i + 1); // i+1 行目（gakkennkita 行）のNAISTセルをスキップ
+                }
+            }
+
+            const naistHeader = isToNAIST ? "NAIST到着" : "NAIST出発";
+            const otherHeader = isToNAIST ? "バス発車" : "駅到着";
+
+            let html = `<table>
+            <colgroup>
+                <col class="col-naist">
+                <col class="col-target-station">
+                <col class="col-other">
+                <col class="col-dur">
+            </colgroup>
+            <tr>
+                <th>${naistHeader}</th>
+                <th>対象駅</th>
+                <th>${otherHeader}</th>
+                <th>所要時間</th>
             </tr>`;
+
+            allRoutes.forEach((route, i) => {
+                const naistTime = isToNAIST ? route.arr : route.dep;
+                const otherTime = isToNAIST ? route.dep : route.arr;
+                const duration = timeToMins(route.arr) - timeToMins(route.dep);
+
+                // このインデックスが rowspan=2 の親か判定
+                const isMergeParent = !skipSet.has(i) && skipSet.has(i + 1) &&
+                    (() => {
+                        const next = allRoutes[i + 1];
+                        const keyA = isToNAIST ? route.arr : route.dep;
+                        const keyB = isToNAIST ? next.arr : next.dep;
+                        return keyA === keyB && route.stationId === "gakuenmae" && next.stationId === "gakkennkita";
+                    })();
+
+                const isSkipped = skipSet.has(i); // NAISTセルを省く行
+
+                if (isSkipped) {
+                    // NAISTセルを省いた行（gakkennkita 行）
+                    html += `<tr class="merged-sub-row">
+                    <td class="col-target-station"><span class="badge bg-${route.stationId}">${route.stationName}</span></td>
+                    <td>${otherTime}</td>
+                    <td>${duration}分</td>
+                </tr>`;
+                } else if (isMergeParent) {
+                    // NAISTセルを rowspan=2 で出す行（gakuenmae 行）
+                    html += `<tr>
+                    <td class="time-highlight merged-naist-cell" rowspan="2">${naistTime}</td>
+                    <td class="col-target-station"><span class="badge bg-${route.stationId}">${route.stationName}</span></td>
+                    <td class="col-other">${otherTime}</td>
+                    <td class="col-dur">${duration}分</td>
+                </tr>`;
+                } else {
+                    // 通常行
+                    html += `<tr>
+                    <td class="time-highlight">${naistTime}</td>
+                    <td class="col-target-station"><span class="badge bg-${route.stationId}">${route.stationName}</span></td>
+                    <td class="col-other">${otherTime}</td>
+                    <td class="col-dur">${duration}分</td>
+                </tr>`;
+                }
             });
 
             html += "</table>";
@@ -503,6 +593,10 @@
             html += "<p style='font-size: 0.8em;'>電車のダイヤはよく使いそうな時間帯に絞ってデータを入れています．ダイヤ改正などがあればソースコードの中に必要なデータを補充してください．</p>";
             container.innerHTML = html;
         }
+        // ページロード時に「帰り」バス時刻表をデフォルト表示
+        window.addEventListener("DOMContentLoaded", () => {
+            renderUnifiedTable();
+        });
     </script>
 
 </body>
